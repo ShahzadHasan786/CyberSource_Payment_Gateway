@@ -1,0 +1,9 @@
+<?xml version="1.0"?>
+<config>
+    <modules>
+        <SCWebstore_CyberSource>
+            <active>true</active>
+            <codePool>local</codePool>			
+        </SCWebstore_CyberSource>
+    </modules>
+</config>

@@ -1,0 +1,136 @@
+<?php
+	// Retrieve order
+	$_order = new Mage_Sales_Model_Order();
+	$orderId = Mage::getSingleton('checkout/session')->getLastRealOrderId();
+	$_order->loadByIncrementId($orderId);
+?>
+<?php 
+	$profile_id = Mage::getStoreConfig('payment/cybersource/profile_id');
+	$access_key = Mage::getStoreConfig('payment/cybersource/access_key');
+	$secret_key = Mage::getStoreConfig('payment/cybersource/secret_key');
+	$mode 		= Mage::getStoreConfig('payment/cybersource/mode');	
+	if($mode == "1"){
+		$actionurl = "https://secureacceptance.cybersource.com/pay";
+	} else {
+		$actionurl = "https://testsecureacceptance.cybersource.com/pay";
+	}
+	$currency 	= "QAR";	
+	$cart 		= Mage::getModel('checkout/cart')->getQuote(); 	
+	$amount		= number_format($cart->grand_total,2);
+	$customerData = Mage::getSingleton('customer/session')->getCustomer();
+	$bill_to_forename = $customerData->firstname;
+	$bill_to_surname = $customerData->lastname;
+	$bill_to_email = $customerData->email;
+	
+	$checkout = Mage::getSingleton('checkout/session')->getQuote(); 
+	$billing = $checkout->getBillingAddress(); 
+	$billingaddress = $billing->street;
+	//$twoequalpartsarray = str_split($billingaddress,35); 
+	
+	$bill_line_1 = substr($billingaddress,0,40);
+	$bill_line_2 = substr($billingaddress,40);
+	$bill_line_1 = str_replace("\n", "", $bill_line_1);
+	$bill_line_1 = str_replace("\r", "", $bill_line_1);
+	$bill_line_2 = str_replace("\n", "", $bill_line_2);
+	$bill_line_2 = str_replace("\r", "", $bill_line_2);
+	$bill_to_address_line1 = "".rtrim($bill_line_1)."";
+	$bill_to_address_line2 = "".rtrim($bill_line_2)."";
+	$bill_to_address_city = $billing->city;
+	$bill_to_address_country = $billing->country_id;
+	$bill_to_address_postal_code = $billing->postcode;	
+	$override_custom_receipt_page = Mage::getUrl('',array('_secure'=>true))."CyberSource/payment/success/";
+	$override_custom_cancel_page  = Mage::getUrl('',array('_secure'=>true))."CyberSource/payment/cancel/";
+?>
+<?php 
+	//$profile_id = "D68A63C2-C6D5-47B3-A4A7-8EBF1AA1B358";
+	//$access_key = "c02c74a6a5f13527bb5424b7414558bc";
+	//$secret_key = "f868c43d07ab4416861b20db57ff74191147a22769664e1d8dd775735b9d1a94c2875136bac04140888fbfe4de6865dc79c37a6442f5496dbaafa54a49d9ce77253ca560f0d14761a1dbddf2c5b56664ee233f160ba7496a81afd9c5309627b341efd6b2448a464a9bb56a4bac73b538f330538caccd4308bf255e599eee6921";
+	//$amount = "289";
+	//$currency = "QAR";
+	//$bill_to_forename = "Kamal";
+	//$bill_to_surname = "Kumar";
+	//$bill_to_address_line1 = "Building 12, Near Almeera SuperMarket,";
+	//$bill_to_address_line2 = "Madinath Khalifa North";
+	//$bill_to_address_city = "Doha";
+	//$bill_to_address_country = "QA";
+	//$bill_to_email = "kamal@bssqatar.com";
+	//$override_custom_receipt_page = "https://www.scwebstore.com/test.php";	
+	
+
+	$ip = $_SERVER['REMOTE_ADDR']?:($_SERVER['HTTP_X_FORWARDED_FOR']?:$_SERVER['HTTP_CLIENT_IP']);
+	$params['profile_id'] = $profile_id;
+	$params['access_key'] = $access_key;
+	$params['transaction_uuid'] =  uniqid();
+	$params['signed_field_names'] =  "access_key,profile_id,transaction_uuid,signed_field_names,unsigned_field_names,signed_date_time,locale,transaction_type,reference_number,amount,currency,customer_ip_address,bill_to_forename,bill_to_surname,bill_to_address_line1,bill_to_address_line2,bill_to_address_city,bill_to_address_country,bill_to_address_postal_code,bill_to_email,override_custom_receipt_page,override_custom_cancel_page";
+	$params['unsigned_field_names'] =  "";
+	$params['signed_date_time'] =  gmdate("Y-m-d\TH:i:s\Z");
+	$params['locale'] =  "en";
+	$params['transaction_type'] =  "sale";
+	$params['reference_number'] =  "1433856682324";
+	$params['amount'] =  $amount;
+	$params['currency'] =  $currency;
+	$params['customer_ip_address'] = $ip;
+    $params['bill_to_forename'] =  $bill_to_forename;
+	$params['bill_to_surname'] = $bill_to_surname;
+	$params['bill_to_address_line1'] = $bill_to_address_line1;
+	$params['bill_to_address_line2'] = $bill_to_address_line2;
+	$params['bill_to_address_city'] =  $bill_to_address_city;
+	$params['bill_to_address_country'] = $bill_to_address_country;
+	$params['bill_to_address_postal_code'] = $bill_to_address_postal_code;
+	$params['bill_to_email'] = $bill_to_email;
+    $params['override_custom_receipt_page'] = $override_custom_receipt_page;
+	$params['override_custom_cancel_page'] = $override_custom_cancel_page;
+	$params['submit'] = "submit";
+	
+	// build data to sign of params 
+	$signedFieldNames = explode(",",$params["signed_field_names"]);
+	foreach ($signedFieldNames as $field) {
+	   $dataToSign[] = $field . "=" . $params[$field];
+	}
+	
+	// commma seperate
+	$commaseparate = implode(",",$dataToSign);
+	// make a signature with sha256 encryption
+	$secretkey = $secret_key;
+	$signaturesecure = base64_encode(hash_hmac('sha256', $commaseparate, $secretkey, true));
+    $ga = "GA1.2.1068368019.1427702665";
+?>
+
+  <p align="center" style="color:#E91115; font-size:18px;">You will be redirected to our secure payment page. Please confirm for proceed to payment. </p><br/>
+  <form method="post" action="<?php echo $actionurl; ?>">
+  <input type="hidden" name="access_key" id="access_key" value="<?php echo $access_key; ?>">
+  <input type="hidden" name="profile_id" id="profile_id" value="<?php echo $profile_id; ?>">
+  <input type="hidden" name="transaction_uuid" id="transaction_uuid" value="<?php echo $params['transaction_uuid']; ?>">
+  <input type="hidden" name="signed_field_names" id="signed_field_names" value="<?php echo $params['signed_field_names']; ?>">
+  <input type="hidden" name="unsigned_field_names" id="unsigned_field_names" value="<?php echo $params['unsigned_field_names']; ?>">
+  <input type="hidden" name="signed_date_time" id="signed_date_time" value="<?php echo $params['signed_date_time']; ?>">
+  <input type="hidden" name="locale" id="locale" value="<?php echo $params['locale']; ?>">
+  <input type="hidden" name="transaction_type" id="transaction_type" value="<?php echo $params['transaction_type']; ?>"/>
+  <input type="hidden" name="reference_number" id="reference_number" value="<?php echo $params['reference_number']; ?>"/>
+  <input type="hidden" name="amount" id="amount" value="<?php echo $amount; ?>"/>
+  <input type="hidden" name="currency" id="currency" value="<?php echo $currency; ?>"/>
+  <input type="hidden" name="customer_ip_address" id="customer_ip_address" value="<?php echo $ip;?>"/>
+  <input type="hidden" name="bill_to_forename" id="bill_to_forename" value="<?php echo $bill_to_forename;?>"/>
+  <input type="hidden" name="bill_to_surname" id="bill_to_surname"  value="<?php echo $bill_to_surname;?>"/>
+  <input type="hidden" name="bill_to_address_line1" id="bill_to_address_line1"  value="<?php echo $bill_to_address_line1;?>"/>
+  <input type="hidden" name="bill_to_address_line2" id="bill_to_address_line2"  value="<?php echo $bill_to_address_line2;?>"/>
+  <input type="hidden" name="bill_to_address_city" id="bill_to_address_city"  value="<?php echo $bill_to_address_city;?>"/>
+  <input type="hidden" name="bill_to_address_country" id="bill_to_address_country"  value="<?php echo $bill_to_address_country;?>"/>
+  <input type="hidden" name="bill_to_address_postal_code" id="bill_to_address_postal_code"  value="<?php echo $bill_to_address_postal_code;?>"/>
+  <input type="hidden" name="bill_to_email" id="bill_to_email"  value="<?php echo $bill_to_email;?>"/>
+  <input type="hidden" id="override_custom_receipt_page" name="override_custom_receipt_page" value="<?php echo $override_custom_receipt_page;?>"/>
+  <input type="hidden" id="override_custom_cancel_page" name="override_custom_cancel_page" value="<?php echo $override_custom_cancel_page;?>"/>  
+  <input type="hidden" id="submit" name="submit" value="<?php echo $params['submit']; ?>"/>
+  <input type="hidden" id="_ga" name="_ga" value="<?php echo $ga; ?>"/>
+  <input type="hidden" id="signature" name="signature" value="<?php echo $signaturesecure; ?>"/>
+  <center><input type="submit" id="submit" value="Proceed to Payment" class="button" style="background-color:#E70C10; width: 20%; font-size: 20px; padding: 11px 19px; border-radius: 6px; border: 2px solid #cccccc; cursor: pointer; color: #ffffff;" /></center>
+   <!--<div class="buttons">
+    <div class="right">
+      <input type="submit" id="submit" value="Confirm Order" class="button" />      
+      <script type="text/javascript" src="http://milonme.com/demo/cbq/payment_form.js"></script>
+    </div>
+  </div>-->
+</form>
+<!--<script type="text/javascript">
+document.mygatewayform.submit();
+</script>-->
